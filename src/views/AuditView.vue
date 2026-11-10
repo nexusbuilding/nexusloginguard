@@ -4,12 +4,14 @@
 -->
 <script setup lang="ts">
 import { showError } from '@nextcloud/dialogs'
-import { t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { onMounted, ref } from 'vue'
 import IconAccountCheck from 'vue-material-design-icons/AccountCheck.vue'
+import IconAccountLock from 'vue-material-design-icons/AccountLock.vue'
+import IconCounter from 'vue-material-design-icons/Counter.vue'
 import IconHistory from 'vue-material-design-icons/History.vue'
 import IconLockOpen from 'vue-material-design-icons/LockOpenVariant.vue'
 import ViewHeader from '../components/ViewHeader.vue'
@@ -48,13 +50,18 @@ onMounted(async () => {
 			<li v-for="(e, i) in entries" :key="i" class="audit__item">
 				<div class="audit__icon" :class="`audit__icon--${e.action}`">
 					<IconAccountCheck v-if="e.action === 'enable_account'" :size="20" />
+					<IconAccountLock v-else-if="e.action === 'policy_lock' || e.action === 'account_disabled'" :size="20" />
+					<IconCounter v-else-if="e.action === 'reset_counter'" :size="20" />
 					<IconLockOpen v-else :size="20" />
 				</div>
 				<div class="audit__body">
 					<div class="audit__title">
 						{{ actionLabel(e.action) }}: <strong>{{ e.target }}</strong>
 					</div>
-					<div v-if="e.details" class="audit__details">
+					<div v-if="e.details && e.action === 'policy_lock'" class="audit__details">
+						{{ n(APP_ID, 'after %n failed login', 'after %n consecutive failed logins', Number(e.details)) }}
+					</div>
+					<div v-else-if="e.details" class="audit__details">
 						{{ t(APP_ID, 'IP addresses: {ips}', { ips: e.details }) }}
 					</div>
 				</div>
@@ -109,6 +116,12 @@ onMounted(async () => {
 	justify-content: center;
 	background: var(--color-primary-element-light);
 	color: var(--color-primary-element-light-text);
+}
+
+.audit__icon--policy_lock,
+.audit__icon--account_disabled {
+	background: color-mix(in srgb, var(--color-error-text) 14%, transparent);
+	color: var(--color-error-text);
 }
 
 .audit__icon--enable_account {

@@ -15,6 +15,7 @@ Login Guard records failed logins per account and shows the live state of Nextcl
 - Per-account overview of failed logins with last IP, client and reason (wrong password, unknown login name, disabled account, failed 2FA)
 - Live brute-force state per IP – *throttled* (with the current delay) or *blocked* (HTTP 429) – read through `OCP\Security\Bruteforce\IThrottler`, so it works with the database **and** the Redis backend
 - Unblock an account (all its IPs of the last 48 h) or a single IP; optionally re-enable disabled accounts
+- Password policy integration: "maximum login attempts" counter per account, accounts locked by the policy, one-click unlock
 - Statistics, IP check and an audit log of all actions
 - Delegation to groups in *Administration settings → Security*
 - English and German translations

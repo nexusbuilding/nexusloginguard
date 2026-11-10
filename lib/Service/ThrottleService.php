@@ -25,12 +25,14 @@ use Psr\Log\LoggerInterface;
  * read the throttling state and are what `occ security:bruteforce:*` uses.
  *
  * @psalm-type IpState = array{ip: string, attempts12h: int, attempts30m: int, delayMs: int, blocked: bool, throttled: bool, bypass: bool}
- * @psalm-type Reason = array{type: 'ip_blocked'|'ip_throttled'|'account_disabled', ip?: string, attempts?: int, limit?: int, delayMs?: int}
+ * @psalm-type Reason = array{type: 'ip_blocked'|'ip_throttled'|'account_locked'|'account_disabled'|'policy_counter', ip?: string, attempts?: int, limit?: int, delayMs?: int, count?: int, max?: int, by?: string, at?: int, cause?: string}
+ * @psalm-import-type DisabledInfo from PolicyService
  * @psalm-api
  */
 class ThrottleService {
 	public const ACTION = 'login';
 
+	public const STATE_LOCKED = 'locked';
 	public const STATE_BLOCKED = 'blocked';
 	public const STATE_THROTTLED = 'throttled';
 	public const STATE_DISABLED = 'disabled';
@@ -115,14 +117,29 @@ class ThrottleService {
 	/**
 	 * Overall state and machine readable reasons (translated in the frontend).
 	 *
+	 * Priority: account locked by password policy > IP blocked > IP throttled
+	 * > account disabled otherwise > OK.
+	 *
 	 * @param list<IpState> $ipStates
+	 * @param DisabledInfo|null $disabledInfo
 	 * @return array{state: string, reasons: list<Reason>}
 	 */
-	public static function summarize(array $ipStates, bool $accountDisabled, int $maxAttempts): array {
+	public static function summarize(
+		array $ipStates,
+		bool $accountDisabled,
+		int $maxAttempts,
+		?array $disabledInfo = null,
+		int $policyCount = 0,
+		int $policyMax = 0,
+	): array {
 		$reasons = [];
 		$hasBlocked = false;
 		$hasThrottled = false;
+		$locked = $accountDisabled && $disabledInfo !== null && $disabledInfo['reason'] === PolicyService::REASON_POLICY;
 
+		if ($locked) {
+			$reasons[] = ['type' => 'account_locked', 'attempts' => $disabledInfo['attempts'], 'at' => $disabledInfo['at']];
+		}
 		foreach ($ipStates as $s) {
 			if ($s['blocked']) {
 				$hasBlocked = true;
@@ -135,11 +152,17 @@ class ThrottleService {
 				$reasons[] = ['type' => 'ip_throttled', 'ip' => $s['ip'], 'attempts' => $s['attempts12h'], 'delayMs' => $s['delayMs']];
 			}
 		}
-		if ($accountDisabled) {
-			$reasons[] = ['type' => 'account_disabled'];
+		if ($accountDisabled && !$locked) {
+			$reasons[] = $disabledInfo !== null
+				? ['type' => 'account_disabled', 'cause' => $disabledInfo['reason'], 'by' => $disabledInfo['by'], 'at' => $disabledInfo['at']]
+				: ['type' => 'account_disabled'];
+		}
+		if (!$accountDisabled && $policyMax > 0 && $policyCount > 0) {
+			$reasons[] = ['type' => 'policy_counter', 'count' => $policyCount, 'max' => $policyMax];
 		}
 
 		$state = match (true) {
+			$locked => self::STATE_LOCKED,
 			$hasBlocked => self::STATE_BLOCKED,
 			$hasThrottled => self::STATE_THROTTLED,
 			$accountDisabled => self::STATE_DISABLED,

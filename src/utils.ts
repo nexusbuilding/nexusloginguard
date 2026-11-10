@@ -12,8 +12,9 @@ export const locale = (): string => getLanguage().replace('_', '-')
 
 export function stateLabel(state: State): string {
 	switch (state) {
-	case 'blocked': return t(APP_ID, 'Blocked')
-	case 'throttled': return t(APP_ID, 'Throttled')
+	case 'locked': return t(APP_ID, 'Account locked')
+	case 'blocked': return t(APP_ID, 'IP blocked')
+	case 'throttled': return t(APP_ID, 'IP throttled')
 	case 'disabled': return t(APP_ID, 'Disabled')
 	default: return t(APP_ID, 'OK')
 	}
@@ -21,6 +22,7 @@ export function stateLabel(state: State): string {
 
 export function stateVariant(state: State): 'error' | 'warning' | 'secondary' | 'success' {
 	switch (state) {
+	case 'locked':
 	case 'blocked': return 'error'
 	case 'throttled': return 'warning'
 	case 'disabled': return 'secondary'
@@ -46,8 +48,20 @@ export function reasonText(r: Reason): string {
 		return t(APP_ID, 'IP {ip} is throttled: {attempts} failed attempts in 12 hours, every login is delayed by {seconds} s', {
 			ip: r.ip ?? '', attempts: String(r.attempts ?? 0), seconds: seconds(r.delayMs ?? 0),
 		})
+	case 'account_locked':
+		return r.at
+			? n(APP_ID, 'Account locked by the password policy after %n failed login on {date}', 'Account locked by the password policy after %n consecutive failed logins on {date}', r.attempts ?? 0, { date: formatDateTime(r.at) })
+			: n(APP_ID, 'Account locked by the password policy after %n failed login', 'Account locked by the password policy after %n consecutive failed logins', r.attempts ?? 0)
 	case 'account_disabled':
+		if (r.cause === 'manual' && r.by) {
+			return t(APP_ID, 'The user account was disabled by {user} on {date}', { user: r.by, date: formatDateTime(r.at ?? 0) })
+		}
+		if (r.cause === 'system') {
+			return t(APP_ID, 'The user account was disabled by the system (e.g. occ or LDAP) on {date}', { date: formatDateTime(r.at ?? 0) })
+		}
 		return t(APP_ID, 'The user account is disabled')
+	case 'policy_counter':
+		return t(APP_ID, '{count} of {max} consecutive failed logins until the password policy locks the account', { count: String(r.count ?? 0), max: String(r.max ?? 0) })
 	}
 	return ''
 }
@@ -81,6 +95,9 @@ export function actionLabel(action: string): string {
 	case 'unblock_account': return t(APP_ID, 'Account unblocked')
 	case 'unblock_ip': return t(APP_ID, 'IP unblocked')
 	case 'enable_account': return t(APP_ID, 'Account enabled')
+	case 'reset_counter': return t(APP_ID, 'Failed login counter reset')
+	case 'policy_lock': return t(APP_ID, 'Account locked by password policy')
+	case 'account_disabled': return t(APP_ID, 'Account disabled')
 	default: return action
 	}
 }

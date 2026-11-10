@@ -13,6 +13,7 @@ use OCA\NexusLoginGuard\AppInfo\Application;
 use OCA\NexusLoginGuard\Service\AccessService;
 use OCA\NexusLoginGuard\Service\ActionLogService;
 use OCA\NexusLoginGuard\Service\AttemptService;
+use OCA\NexusLoginGuard\Service\PolicyService;
 use OCA\NexusLoginGuard\Service\ThrottleService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -32,6 +33,7 @@ use OCP\IUserSession;
  * admins and members of the delegated groups only.
  *
  * @psalm-import-type AccountAgg from AttemptService
+ * @psalm-import-type IpState from ThrottleService
  * @psalm-suppress UnusedClass
  */
 #[OpenAPI(OpenAPI::SCOPE_IGNORE)]
@@ -45,6 +47,7 @@ class ApiController extends Controller {
 		private AttemptService $attempts,
 		private ThrottleService $throttle,
 		private ActionLogService $actionLog,
+		private PolicyService $policy,
 		private IL10N $l,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -66,10 +69,11 @@ class ApiController extends Controller {
 
 	private static function stateOrder(string $state): int {
 		return match ($state) {
-			ThrottleService::STATE_BLOCKED => 0,
-			ThrottleService::STATE_THROTTLED => 1,
-			ThrottleService::STATE_DISABLED => 2,
-			default => 3,
+			ThrottleService::STATE_LOCKED => 0,
+			ThrottleService::STATE_BLOCKED => 1,
+			ThrottleService::STATE_THROTTLED => 2,
+			ThrottleService::STATE_DISABLED => 3,
+			default => 4,
 		};
 	}
 
@@ -96,7 +100,20 @@ class ApiController extends Controller {
 			'backend' => $this->throttle->backend(),
 			'retentionDays' => $this->access->getRetentionDays(),
 			'remoteAddr' => $this->request->getRemoteAddress(),
+			'proxyMisconfigured' => $this->proxyHeaderIgnored(),
+			'policyMax' => $this->policy->maxAttempts(),
 		]);
+	}
+
+	/**
+	 * True if the request carries an X-Forwarded-For header but Nextcloud
+	 * still uses the direct peer address – i.e. the reverse proxy is not
+	 * listed in "trusted_proxies" and all clients appear with the proxy IP.
+	 */
+	private function proxyHeaderIgnored(): bool {
+		$forwarded = $this->request->getHeader('X-Forwarded-For');
+		$peer = $_SERVER['REMOTE_ADDR'] ?? '';
+		return $forwarded !== '' && $peer !== '' && $this->request->getRemoteAddress() === $peer;
 	}
 
 	#[NoAdminRequired]
@@ -110,8 +127,11 @@ class ApiController extends Controller {
 		$liveSince = $now - 12 * 3600;
 		$max = $this->throttle->maxAttempts();
 
+		$search = trim($search);
+		$policyMax = $this->policy->maxAttempts();
 		$rows = [];
-		foreach ($this->attempts->aggregateByAccount($since, trim($search)) as $key => $agg) {
+		$seen = [];
+		foreach ($this->attempts->aggregateByAccount($since, $search) as $key => $agg) {
 			$ips = $this->attempts->ipsForKey($key, $since);
 			$ipStates = [];
 			foreach ($ips as $ip => $info) {
@@ -119,28 +139,32 @@ class ApiController extends Controller {
 					$ipStates[] = $this->throttle->ipStatus($ip);
 				}
 			}
+			$rows[] = $this->buildRow($key, $agg, $ips, $ipStates, $max, $policyMax);
+			if ($agg['uid'] !== null) {
+				$seen[$agg['uid']] = true;
+			}
+		}
 
-			$user = $agg['uid'] !== null ? $this->userManager->get($agg['uid']) : null;
-			$summary = ThrottleService::summarize($ipStates, $user !== null && !$user->isEnabled(), $max);
-
-			$rows[] = [
-				'key' => $key,
-				'uid' => $agg['uid'],
-				'exists' => $user !== null,
-				'displayName' => $user?->getDisplayName() ?? ($agg['uid'] ?? $agg['loginNames'][0]),
-				'loginNames' => array_values(array_unique($agg['loginNames'])),
-				'enabled' => $user?->isEnabled(),
-				'lastLogin' => $user?->getLastLogin() ?? 0,
-				'total' => $agg['total'],
-				'c24' => $agg['c24'],
-				'c7' => $agg['c7'],
-				'lastAttempt' => $agg['lastAttempt'],
-				'firstAttempt' => $agg['firstAttempt'],
-				'lastIp' => array_key_first($ips) ?? '',
-				'ipCount' => count($ips),
-				'state' => $summary['state'],
-				'reasons' => $summary['reasons'],
+		// Accounts locked by the password policy stay visible until they are enabled again,
+		// even when their failed logins are older than the selected period
+		foreach ($this->policy->policyLockedUids() as $uid) {
+			if (isset($seen[$uid])) {
+				continue;
+			}
+			$user = $this->userManager->get($uid);
+			if ($user === null || $user->isEnabled()) {
+				continue;
+			}
+			if ($search !== '' && stripos($uid . ' ' . $user->getDisplayName(), $search) === false) {
+				continue;
+			}
+			$key = 'u:' . $uid;
+			$ips = $this->attempts->ipsForKey($key, $now - 30 * 86400);
+			$agg = [
+				'key' => $key, 'uid' => $uid, 'loginNames' => [$uid],
+				'total' => 0, 'c24' => 0, 'c7' => 0, 'lastAttempt' => 0, 'firstAttempt' => 0,
 			];
+			$rows[] = $this->buildRow($key, $agg, $ips, [], $max, $policyMax);
 		}
 
 		usort($rows, /**
@@ -150,6 +174,41 @@ class ApiController extends Controller {
 			=> [self::stateOrder($a['state']), -$a['lastAttempt']] <=> [self::stateOrder($b['state']), -$b['lastAttempt']]);
 
 		return new JSONResponse(['accounts' => $rows, 'generatedAt' => $now]);
+	}
+
+	/**
+	 * @param AccountAgg $agg
+	 * @param array<string, array{count: int, last: int}> $ips
+	 * @param list<IpState> $ipStates
+	 * @return array{state: string, lastAttempt: int, ...<string, mixed>}
+	 */
+	private function buildRow(string $key, array $agg, array $ips, array $ipStates, int $max, int $policyMax): array {
+		$user = $agg['uid'] !== null ? $this->userManager->get($agg['uid']) : null;
+		$disabled = $user !== null && !$user->isEnabled();
+		$disabledInfo = $disabled ? $this->policy->disabledInfo($user->getUID()) : null;
+		$policyCount = ($user !== null && $policyMax > 0) ? $this->policy->counter($user->getUID()) : 0;
+		$summary = ThrottleService::summarize($ipStates, $disabled, $max, $disabledInfo, $policyCount, $policyMax);
+
+		return [
+			'key' => $key,
+			'uid' => $agg['uid'],
+			'exists' => $user !== null,
+			'displayName' => $user?->getDisplayName() ?? ($agg['uid'] ?? ($agg['loginNames'][0] ?? '')),
+			'loginNames' => array_values(array_unique($agg['loginNames'])),
+			'enabled' => $user?->isEnabled(),
+			'lastLogin' => $user?->getLastLogin() ?? 0,
+			'total' => $agg['total'],
+			'c24' => $agg['c24'],
+			'c7' => $agg['c7'],
+			'lastAttempt' => $agg['lastAttempt'],
+			'firstAttempt' => $agg['firstAttempt'],
+			'lastIp' => array_key_first($ips) ?? '',
+			'ipCount' => count($ips),
+			'policyCount' => $policyCount,
+			'policyMax' => $policyMax,
+			'state' => $summary['state'],
+			'reasons' => $summary['reasons'],
+		];
 	}
 
 	#[NoAdminRequired]
@@ -273,8 +332,24 @@ class ApiController extends Controller {
 			return $this->forbidden();
 		}
 		$user->setEnabled(true);
+		$this->policy->resetCounter($uid);
 		$this->actionLog->add($actor->getUID(), ActionLogService::ACTION_ENABLE_ACCOUNT, $uid);
 		return new JSONResponse(['enabled' => true]);
+	}
+
+	#[NoAdminRequired]
+	#[FrontpageRoute(verb: 'POST', url: '/api/reset-counter')]
+	public function resetCounter(string $uid): JSONResponse {
+		$actor = $this->currentUser();
+		if ($actor === null) {
+			return $this->forbidden();
+		}
+		if ($this->userManager->get($uid) === null) {
+			return $this->error($this->l->t('User not found'), Http::STATUS_NOT_FOUND);
+		}
+		$this->policy->resetCounter($uid);
+		$this->actionLog->add($actor->getUID(), ActionLogService::ACTION_RESET_COUNTER, $uid);
+		return new JSONResponse(['reset' => true]);
 	}
 
 	#[NoAdminRequired]

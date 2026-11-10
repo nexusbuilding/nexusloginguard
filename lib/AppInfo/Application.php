@@ -11,6 +11,7 @@ namespace OCA\NexusLoginGuard\AppInfo;
 
 use OCA\NexusLoginGuard\Listener\LoginFailedListener;
 use OCA\NexusLoginGuard\Listener\TwoFactorFailedListener;
+use OCA\NexusLoginGuard\Listener\UserChangedListener;
 use OCA\NexusLoginGuard\Service\AccessService;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -22,6 +23,7 @@ use OCP\INavigationManager;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
 use OCP\L10N\IFactory;
+use OCP\User\Events\UserChangedEvent;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'nexusloginguard';
@@ -34,6 +36,7 @@ class Application extends App implements IBootstrap {
 	public function register(IRegistrationContext $context): void {
 		$context->registerEventListener(AnyLoginFailedEvent::class, LoginFailedListener::class);
 		$context->registerEventListener(TwoFactorProviderChallengeFailed::class, TwoFactorFailedListener::class);
+		$context->registerEventListener(UserChangedEvent::class, UserChangedListener::class);
 	}
 
 	public function boot(IBootContext $context): void {

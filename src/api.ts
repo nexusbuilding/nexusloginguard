@@ -5,14 +5,19 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 
-export type State = 'blocked' | 'throttled' | 'disabled' | 'ok'
+export type State = 'locked' | 'blocked' | 'throttled' | 'disabled' | 'ok'
 
 export interface Reason {
-	type: 'ip_blocked' | 'ip_throttled' | 'account_disabled'
+	type: 'ip_blocked' | 'ip_throttled' | 'account_locked' | 'account_disabled' | 'policy_counter'
 	ip?: string
 	attempts?: number
 	limit?: number
 	delayMs?: number
+	count?: number
+	max?: number
+	by?: string
+	at?: number
+	cause?: 'policy' | 'manual' | 'system'
 }
 
 export interface Account {
@@ -30,6 +35,8 @@ export interface Account {
 	firstAttempt: number
 	lastIp: string
 	ipCount: number
+	policyCount: number
+	policyMax: number
 	state: State
 	reasons: Reason[]
 }
@@ -66,6 +73,8 @@ export interface Meta {
 	backend: 'redis' | 'database'
 	retentionDays: number
 	remoteAddr: string
+	proxyMisconfigured: boolean
+	policyMax: number
 }
 
 export interface Stats {
@@ -122,6 +131,9 @@ export const api = {
 	},
 	async enable(uid: string): Promise<void> {
 		await axios.post(url('/api/enable'), { uid })
+	},
+	async resetCounter(uid: string): Promise<void> {
+		await axios.post(url('/api/reset-counter'), { uid })
 	},
 	async actions(): Promise<AuditEntry[]> {
 		return (await axios.get(url('/api/actions'))).data.actions

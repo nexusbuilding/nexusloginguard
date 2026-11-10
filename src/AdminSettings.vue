@@ -66,7 +66,7 @@ async function save() {
 			</div>
 
 			<NcCheckboxRadioSwitch v-model="managersCanEnable" type="switch">
-				{{ t(APP_ID, 'These groups may re-enable disabled user accounts (never administrator accounts)') }}
+				{{ t(APP_ID, 'These groups may unlock accounts locked by the password policy and re-enable disabled accounts (never administrator accounts)') }}
 			</NcCheckboxRadioSwitch>
 
 			<NcTextField v-model="retentionDays"

@@ -38,7 +38,7 @@ const selectedAccount = ref<Account | null>(null)
 const accountsView = ref<InstanceType<typeof AccountsView> | null>(null)
 const sidebarBusy = computed(() => !!(selectedAccount.value && accountsView.value?.busy[selectedAccount.value.key]))
 
-const isPrivateRemote = computed(() => /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|::1$|fc|fd)/i.test(meta.value?.remoteAddr ?? ''))
+const isPrivateRemote = computed(() => !!meta.value?.proxyMisconfigured)
 
 onMounted(async () => {
 	try {
@@ -94,6 +94,10 @@ function checkIp(ip: string) {
 						<strong>{{ t(APP_ID, '{count} / 30 min', { count: String(meta.maxAttempts) }) }}</strong>
 					</div>
 					<div class="nav-footer__row">
+						<span>{{ t(APP_ID, 'Password policy') }}</span>
+						<strong>{{ meta.policyMax > 0 ? t(APP_ID, '{count} attempts', { count: String(meta.policyMax) }) : t(APP_ID, 'off') }}</strong>
+					</div>
+					<div class="nav-footer__row">
 						<span>{{ t(APP_ID, 'Retention') }}</span>
 						<strong>{{ t(APP_ID, '{days} days', { days: String(meta.retentionDays) }) }}</strong>
 					</div>
@@ -108,7 +112,7 @@ function checkIp(ip: string) {
 						{{ t(APP_ID, 'Failed logins are recorded, but Nextcloud does not throttle them because "auth.bruteforce.protection.enabled" is set to false.') }}
 					</NcNoteCard>
 					<NcNoteCard v-if="isPrivateRemote" type="warning" :heading="t(APP_ID, 'Check your reverse proxy configuration')">
-						{{ t(APP_ID, 'Your request arrives from the private address {ip}. If this is your reverse proxy, configure "trusted_proxies" and "forwarded_for_headers" – otherwise all failed logins are attributed to the proxy and every user gets throttled at once.', { ip: meta.remoteAddr }) }}
+						{{ t(APP_ID, 'Your request was forwarded by a reverse proxy ({ip}), but Nextcloud ignores the forwarded client address. Add the proxy to "trusted_proxies" – otherwise all failed logins are attributed to the proxy and every user gets throttled at once.', { ip: meta.remoteAddr }) }}
 					</NcNoteCard>
 				</div>
 
@@ -116,6 +120,7 @@ function checkIp(ip: string) {
 					ref="accountsView"
 					v-model:selected="selectedKey"
 					:can-enable="config.canEnable"
+					:policy-max="meta?.policyMax ?? 0"
 					@select="selectedAccount = $event"
 					@update:blocked="blockedCount = $event"
 					@check-ip="checkIp" />
@@ -132,6 +137,7 @@ function checkIp(ip: string) {
 			@close="selectedKey = null"
 			@unblock="accountsView?.unblock(selectedAccount)"
 			@enable="accountsView?.enable(selectedAccount)"
+			@reset-counter="accountsView?.resetCounter(selectedAccount)"
 			@changed="accountsView?.load(true)" />
 	</NcContent>
 </template>

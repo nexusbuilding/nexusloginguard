@@ -51,6 +51,15 @@ const text = computed(() => props.label ?? stateLabel(props.state))
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error-text) 25%, transparent);
 }
 
+.state-chip--locked {
+	background: var(--color-error-text);
+	color: var(--color-main-background);
+}
+
+.state-chip--locked .state-chip__dot {
+	background: var(--color-main-background);
+}
+
 .state-chip--throttled {
 	background: color-mix(in srgb, var(--color-warning-text) 16%, transparent);
 	color: var(--color-warning-text);

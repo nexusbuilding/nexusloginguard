@@ -26,6 +26,9 @@ class ActionLogService {
 	public const ACTION_UNBLOCK_ACCOUNT = 'unblock_account';
 	public const ACTION_UNBLOCK_IP = 'unblock_ip';
 	public const ACTION_ENABLE_ACCOUNT = 'enable_account';
+	public const ACTION_RESET_COUNTER = 'reset_counter';
+	public const ACTION_POLICY_LOCK = 'policy_lock';
+	public const ACTION_ACCOUNT_DISABLED = 'account_disabled';
 
 	public function __construct(
 		private IDBConnection $db,

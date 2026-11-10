@@ -19,7 +19,9 @@ import IconAccountCheck from 'vue-material-design-icons/AccountCheck.vue'
 import IconAccountMultiple from 'vue-material-design-icons/AccountMultiple.vue'
 import IconAccountQuestion from 'vue-material-design-icons/AccountQuestion.vue'
 import IconAlertOctagon from 'vue-material-design-icons/AlertOctagon.vue'
+import IconCounter from 'vue-material-design-icons/Counter.vue'
 import IconInformation from 'vue-material-design-icons/InformationOutline.vue'
+import IconLock from 'vue-material-design-icons/AccountLock.vue'
 import IconLockOpen from 'vue-material-design-icons/LockOpenVariant.vue'
 import IconMagnify from 'vue-material-design-icons/Magnify.vue'
 import IconRefresh from 'vue-material-design-icons/Refresh.vue'
@@ -31,7 +33,7 @@ import ViewHeader from '../components/ViewHeader.vue'
 import { type Account, api, errorMessage } from '../api.ts'
 import { APP_ID, formatDateTime, formatNumber, reasonText, relativeTime } from '../utils.ts'
 
-const props = defineProps<{ canEnable: boolean }>()
+const props = defineProps<{ canEnable: boolean, policyMax: number }>()
 const emit = defineEmits<{
 	(e: 'update:blocked', count: number): void
 	(e: 'checkIp', ip: string): void
@@ -48,8 +50,9 @@ const periodOptions: Option[] = [
 ]
 const filterOptions: Option[] = [
 	{ id: 'all', label: t(APP_ID, 'All') },
-	{ id: 'active', label: t(APP_ID, 'Blocked or throttled') },
-	{ id: 'blocked', label: t(APP_ID, 'Blocked') },
+	{ id: 'active', label: t(APP_ID, 'Needs attention') },
+	{ id: 'locked', label: t(APP_ID, 'Locked accounts') },
+	{ id: 'blocked', label: t(APP_ID, 'Blocked IPs') },
 	{ id: 'unknown', label: t(APP_ID, 'Unknown login names') },
 ]
 
@@ -70,6 +73,7 @@ const selected = computed(() => accounts.value.find(a => a.key === selectedKey.v
 watch(selected, account => emit('select', account), { immediate: true })
 
 const counts = computed(() => ({
+	locked: accounts.value.filter(a => a.state === 'locked').length,
 	blocked: accounts.value.filter(a => a.state === 'blocked').length,
 	throttled: accounts.value.filter(a => a.state === 'throttled').length,
 	unknown: accounts.value.filter(a => !a.exists).length,
@@ -78,7 +82,8 @@ const counts = computed(() => ({
 
 const filtered = computed(() => accounts.value.filter((a) => {
 	switch (filter.value) {
-	case 'active': return a.state === 'blocked' || a.state === 'throttled'
+	case 'active': return a.state === 'locked' || a.state === 'blocked' || a.state === 'throttled'
+	case 'locked': return a.state === 'locked'
 	case 'blocked': return a.state === 'blocked'
 	case 'unknown': return !a.exists
 	default: return true
@@ -93,7 +98,7 @@ async function load(silent = false) {
 	}
 	try {
 		accounts.value = await api.accounts(Number(period.value.id), search.value.trim())
-		emit('update:blocked', counts.value.blocked)
+		emit('update:blocked', counts.value.locked + counts.value.blocked)
 	} catch (e) {
 		showError(t(APP_ID, 'Could not load failed logins: {error}', { error: errorMessage(e) }))
 	} finally {
@@ -186,9 +191,26 @@ async function enable(a: Account) {
 	}
 }
 
-const isActive = (a: Account) => a.state === 'blocked' || a.state === 'throttled'
+async function resetCounter(a: Account) {
+	if (!a.uid) {
+		return
+	}
+	busy.value[a.key] = true
+	try {
+		await api.resetCounter(a.uid)
+		showSuccess(t(APP_ID, 'Failed login counter of {name} reset', { name: a.displayName }))
+		await load(true)
+	} catch (e) {
+		showError(errorMessage(e))
+	} finally {
+		busy.value[a.key] = false
+	}
+}
 
-defineExpose({ unblock, enable, load, busy })
+const isActive = (a: Account) => a.state === 'blocked' || a.state === 'throttled'
+const policyPercent = (a: Account) => a.policyMax > 0 ? Math.min(100, (a.policyCount / a.policyMax) * 100) : 0
+
+defineExpose({ unblock, enable, resetCounter, load, busy })
 </script>
 
 <template>
@@ -210,12 +232,21 @@ defineExpose({ unblock, enable, load, busy })
 		</ViewHeader>
 
 		<div class="accounts__tiles">
-			<StatTile :label="t(APP_ID, 'Blocked accounts')" :value="counts.blocked" tone="error">
+			<StatTile v-if="policyMax > 0"
+				:label="t(APP_ID, 'Accounts locked by password policy')"
+				:value="counts.locked"
+				:hint="t(APP_ID, 'Limit: {max} consecutive failed logins', { max: String(policyMax) })"
+				tone="error">
+				<template #icon>
+					<IconLock :size="22" />
+				</template>
+			</StatTile>
+			<StatTile :label="t(APP_ID, 'Accounts with a blocked IP')" :value="counts.blocked" tone="error">
 				<template #icon>
 					<IconAlertOctagon :size="22" />
 				</template>
 			</StatTile>
-			<StatTile :label="t(APP_ID, 'Throttled accounts')" :value="counts.throttled" tone="warning">
+			<StatTile :label="t(APP_ID, 'Accounts with a throttled IP')" :value="counts.throttled" tone="warning">
 				<template #icon>
 					<IconTimerSand :size="22" />
 				</template>
@@ -290,6 +321,9 @@ defineExpose({ unblock, enable, load, busy })
 						<th class="num">
 							{{ t(APP_ID, 'Period') }}
 						</th>
+						<th v-if="policyMax > 0" class="col-policy">
+							{{ t(APP_ID, 'Policy') }}
+						</th>
 						<th class="col-time">
 							{{ t(APP_ID, 'Last failure') }}
 						</th>
@@ -345,6 +379,17 @@ defineExpose({ unblock, enable, load, busy })
 						<td class="num strong">
 							{{ formatNumber(a.total) }}
 						</td>
+						<td v-if="policyMax > 0" class="col-policy">
+							<div v-if="a.exists && a.state !== 'locked'"
+								class="policy-meter"
+								:class="{ 'policy-meter--warn': a.policyCount > 0 && a.policyCount >= a.policyMax - 1 }"
+								:title="t(APP_ID, '{count} of {max} consecutive failed logins until the password policy locks the account', { count: String(a.policyCount), max: String(a.policyMax) })">
+								<span class="policy-meter__text">{{ a.policyCount }} / {{ a.policyMax }}</span>
+								<span class="policy-meter__track"><span class="policy-meter__fill" :style="{ width: `${policyPercent(a)}%` }" /></span>
+							</div>
+							<span v-else-if="a.state === 'locked'" class="policy-locked">{{ a.policyMax }} / {{ a.policyMax }}</span>
+							<span v-else class="muted">–</span>
+						</td>
 						<td class="col-time" :title="formatDateTime(a.lastAttempt)">
 							{{ relativeTime(a.lastAttempt) }}
 						</td>
@@ -353,7 +398,18 @@ defineExpose({ unblock, enable, load, busy })
 							<span v-if="a.ipCount > 1" class="more">+{{ a.ipCount - 1 }}</span>
 						</td>
 						<td class="actions" @click.stop>
-							<NcButton v-if="isActive(a)"
+							<NcButton v-if="a.state === 'locked' && props.canEnable"
+								variant="primary"
+								size="small"
+								:disabled="busy[a.key]"
+								@click="enable(a)">
+								<template #icon>
+									<NcLoadingIcon v-if="busy[a.key]" :size="18" />
+									<IconLockOpen v-else :size="18" />
+								</template>
+								{{ t(APP_ID, 'Unlock') }}
+							</NcButton>
+							<NcButton v-else-if="isActive(a)"
 								variant="primary"
 								size="small"
 								:disabled="busy[a.key]"
@@ -377,6 +433,18 @@ defineExpose({ unblock, enable, load, busy })
 									</template>
 									{{ t(APP_ID, 'Check last IP address') }}
 								</NcActionButton>
+								<NcActionButton v-if="isActive(a) && a.state !== 'locked'" close-after-click @click="unblock(a)">
+									<template #icon>
+										<IconLockOpen :size="20" />
+									</template>
+									{{ t(APP_ID, 'Unblock IP addresses') }}
+								</NcActionButton>
+								<NcActionButton v-if="a.exists && a.enabled !== false && a.policyCount > 0" close-after-click @click="resetCounter(a)">
+									<template #icon>
+										<IconCounter :size="20" />
+									</template>
+									{{ t(APP_ID, 'Reset failed login counter') }}
+								</NcActionButton>
 								<NcActionButton v-if="props.canEnable && a.exists && a.enabled === false" close-after-click @click="enable(a)">
 									<template #icon>
 										<IconAccountCheck :size="20" />
@@ -395,7 +463,7 @@ defineExpose({ unblock, enable, load, busy })
 <style scoped>
 .accounts__tiles {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 	gap: 12px;
 	margin-bottom: 20px;
 }
@@ -488,6 +556,7 @@ defineExpose({ unblock, enable, load, busy })
 	background: var(--color-primary-element-light) !important;
 }
 
+.row--locked td:first-child,
 .row--blocked td:first-child {
 	box-shadow: inset 4px 0 0 var(--color-error-text);
 }
@@ -511,19 +580,19 @@ defineExpose({ unblock, enable, load, busy })
 	white-space: nowrap;
 }
 
-@container (max-width: 960px) {
+@container (max-width: 1150px) {
 	.col-short {
 		display: none;
 	}
 }
 
-@container (max-width: 860px) {
+@container (max-width: 950px) {
 	.col-ip {
 		display: none;
 	}
 }
 
-@container (max-width: 700px) {
+@container (max-width: 780px) {
 	.col-time {
 		display: none;
 	}
@@ -531,10 +600,6 @@ defineExpose({ unblock, enable, load, busy })
 	.cell-account {
 		min-width: 200px;
 	}
-}
-
-.cell-account__text {
-	min-width: 0;
 }
 
 .cell-account__name {
@@ -557,7 +622,15 @@ defineExpose({ unblock, enable, load, busy })
 	gap: 4px;
 }
 
+.cell-account__text {
+	flex: 1;
+	min-width: 0;
+}
+
 .cell-account__reason span {
+	white-space: normal;
+	overflow-wrap: break-word;
+	min-width: 0;
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
@@ -569,6 +642,46 @@ defineExpose({ unblock, enable, load, busy })
 	flex-shrink: 0;
 }
 
+.policy-meter {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 70px;
+}
+
+.policy-meter__text {
+	font-variant-numeric: tabular-nums;
+	font-size: var(--font-size-small, 13px);
+}
+
+.policy-meter__track {
+	height: 4px;
+	border-radius: 2px;
+	background: var(--color-background-dark);
+	overflow: hidden;
+}
+
+.policy-meter__fill {
+	display: block;
+	height: 100%;
+	background: var(--color-primary-element);
+}
+
+.policy-meter--warn .policy-meter__fill {
+	background: var(--color-warning-text);
+}
+
+.policy-meter--warn .policy-meter__text,
+.policy-locked {
+	color: var(--color-error-text);
+	font-weight: 600;
+}
+
+.muted {
+	color: var(--color-text-maxcontrast);
+}
+
+.cell-account__reason--locked,
 .cell-account__reason--blocked {
 	color: var(--color-error-text, var(--color-error-text));
 }

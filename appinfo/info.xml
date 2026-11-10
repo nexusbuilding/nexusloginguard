@@ -15,6 +15,7 @@
 - **Per-user overview** of failed logins (24 h / 7 days / selected range), last IP, client and reason (wrong password, unknown login name, disabled account, failed 2FA)
 - **Live brute-force status** read directly from Nextcloud (works with the database and the Redis backend): throttled with current delay, or blocked (HTTP 429) – including a human readable reason
 - **Unblock** an account (all its IPs of the last 48 h) or a single IP with one click, optionally re-enable disabled accounts
+- **Password policy integration**: shows the "maximum login attempts" counter per account, detects accounts locked by the policy and unlocks them with one click
 - **Statistics**: failed logins per day, reasons, top accounts and top IPs
 - **IP check** for any address, even for attempts that happened before the app was installed
 - **Audit trail** of every unblock action, also written to the Nextcloud log
@@ -27,12 +28,13 @@ Note: Nextcloud throttles per IP address (IPv6: /64 network), not per account. M
 - **Übersicht pro Benutzer**: Fehlversuche (24 Std. / 7 Tage / Zeitraum), letzte IP, Client und Grund (falsches Passwort, unbekannter Loginname, deaktiviertes Konto, 2FA fehlgeschlagen)
 - **Live-Brute-Force-Status** direkt aus Nextcloud (Datenbank- und Redis-Backend): gedrosselt mit aktueller Verzögerung oder gesperrt (HTTP 429) – inkl. verständlichem Grund
 - **Entsperren** eines Kontos (alle IPs der letzten 48 Std.) oder einer einzelnen IP per Klick, optional deaktivierte Konten reaktivieren
+- **Passwortrichtlinie**: zeigt den Zähler „Maximale Anmeldeversuche“ pro Konto, erkennt durch die Richtlinie gesperrte Konten und entsperrt sie per Klick
 - **Statistik**: Fehlversuche pro Tag, Gründe, Top-Konten und Top-IPs
 - **IP-Prüfung** für beliebige Adressen
 - **Verlauf** aller Entsperr-Aktionen, zusätzlich im Nextcloud-Log
 - **Delegation**: neben Admins können Gruppen (z. B. Teamleitungen oder Helpdesk) unter *Verwaltung → Sicherheit* freigeschaltet werden
 - Einstellbare Aufbewahrung (Standard 90 Tage) mit automatischer Bereinigung]]></description>
-	<version>1.0.0</version>
+	<version>1.0.1</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="yannik@mediapresenters.de" homepage="https://nexusbuilding.de">Yannik (Nexus Building)</author>
 	<namespace>NexusLoginGuard</namespace>

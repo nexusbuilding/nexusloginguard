@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.0.1 – 2026-11-10
+
+### Added
+- Password policy integration: per-account counter for "maximum login attempts", detection of accounts locked by the policy (new state "Account locked"), one-click unlock and counter reset
+- Records why and by whom an account was disabled (password policy, administrator, system)
+- New audit log entries for policy locks, disabled accounts and counter resets
+
+### Changed
+- Clearer states: "IP blocked" / "IP throttled" instead of "Blocked" / "Throttled", because Nextcloud blocks IP addresses, not accounts
+- The reverse proxy warning is only shown when a forwarded client address is actually ignored (no more false alarm for clients in a private network)
+
+### Fixed
+- Long reasons in the account list are wrapped and truncated cleanly
+
 ## 1.0.0 – 2026-11-09
 
 ### Added

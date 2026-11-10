@@ -15,6 +15,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, ref, watch } from 'vue'
 import IconAccountCheck from 'vue-material-design-icons/AccountCheck.vue'
 import IconAccountQuestion from 'vue-material-design-icons/AccountQuestion.vue'
+import IconCounter from 'vue-material-design-icons/Counter.vue'
 import IconHistory from 'vue-material-design-icons/History.vue'
 import IconIpNetwork from 'vue-material-design-icons/IpNetwork.vue'
 import IconLockOpen from 'vue-material-design-icons/LockOpenVariant.vue'
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 	(e: 'close'): void
 	(e: 'unblock'): void
 	(e: 'enable'): void
+	(e: 'resetCounter'): void
 	(e: 'changed'): void
 }>()
 
@@ -121,7 +123,7 @@ async function unblockIp(ip: string) {
 
 				<NcNoteCard v-for="(r, i) in account.reasons"
 					:key="i"
-					:type="r.type === 'ip_blocked' ? 'error' : (r.type === 'ip_throttled' ? 'warning' : 'info')"
+					:type="(r.type === 'ip_blocked' || r.type === 'account_locked') ? 'error' : ((r.type === 'ip_throttled' || (r.type === 'policy_counter' && (r.count ?? 0) >= (r.max ?? 0) - 1)) ? 'warning' : 'info')"
 					class="summary__note">
 					{{ reasonText(r) }}
 				</NcNoteCard>
@@ -132,6 +134,16 @@ async function unblockIp(ip: string) {
 				</div>
 
 				<div class="summary__actions">
+					<NcButton v-if="account.state === 'locked' && canEnable"
+						variant="primary"
+						:disabled="busy"
+						@click="emit('enable')">
+						<template #icon>
+							<NcLoadingIcon v-if="busy" :size="20" />
+							<IconLockOpen v-else :size="20" />
+						</template>
+						{{ t(APP_ID, 'Unlock account') }}
+					</NcButton>
 					<NcButton v-if="isActive"
 						variant="primary"
 						:disabled="busy"
@@ -140,9 +152,18 @@ async function unblockIp(ip: string) {
 							<NcLoadingIcon v-if="busy" :size="20" />
 							<IconLockOpen v-else :size="20" />
 						</template>
-						{{ t(APP_ID, 'Unblock account') }}
+						{{ t(APP_ID, 'Unblock IP addresses') }}
 					</NcButton>
-					<NcButton v-if="canEnable && account.exists && account.enabled === false"
+					<NcButton v-if="account.exists && account.enabled !== false && account.policyCount > 0"
+						variant="secondary"
+						:disabled="busy"
+						@click="emit('resetCounter')">
+						<template #icon>
+							<IconCounter :size="20" />
+						</template>
+						{{ t(APP_ID, 'Reset failed login counter') }}
+					</NcButton>
+					<NcButton v-if="canEnable && account.exists && account.enabled === false && account.state !== 'locked'"
 						variant="secondary"
 						:disabled="busy"
 						@click="emit('enable')">
@@ -152,6 +173,9 @@ async function unblockIp(ip: string) {
 						{{ t(APP_ID, 'Enable account') }}
 					</NcButton>
 				</div>
+				<p v-if="account.state === 'locked' && !canEnable" class="summary__muted">
+					{{ t(APP_ID, 'Only administrators can unlock this account.') }}
+				</p>
 			</div>
 		</template>
 

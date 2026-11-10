@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\NexusLoginGuard\Tests\Unit\Service;
 
+use OCA\NexusLoginGuard\Service\PolicyService;
 use OCA\NexusLoginGuard\Service\ThrottleService;
 use PHPUnit\Framework\TestCase;
 
@@ -49,6 +50,33 @@ final class ThrottleServiceTest extends TestCase {
 
 		$r = ThrottleService::summarize([], false, 10);
 		$this->assertSame(ThrottleService::STATE_OK, $r['state']);
+		$this->assertSame([], $r['reasons']);
+	}
+
+	public function testPolicyLockHasHighestPriority(): void {
+		$blocked = ThrottleService::buildIpState('192.0.2.1', 15, 11, 25000, false, 10);
+		$info = ['reason' => PolicyService::REASON_POLICY, 'by' => 'password_policy', 'at' => 1700000000, 'attempts' => 5];
+
+		$r = ThrottleService::summarize([$blocked], true, 10, $info, 0, 5);
+		$this->assertSame(ThrottleService::STATE_LOCKED, $r['state']);
+		$this->assertSame('account_locked', $r['reasons'][0]['type']);
+		$this->assertSame(5, $r['reasons'][0]['attempts']);
+	}
+
+	public function testManuallyDisabledIsNotLocked(): void {
+		$info = ['reason' => PolicyService::REASON_MANUAL, 'by' => 'admin', 'at' => 1700000000, 'attempts' => 5];
+		$r = ThrottleService::summarize([], true, 10, $info, 0, 5);
+		$this->assertSame(ThrottleService::STATE_DISABLED, $r['state']);
+		$this->assertSame('manual', $r['reasons'][0]['cause'] ?? null);
+	}
+
+	public function testPolicyCounterIsReported(): void {
+		$r = ThrottleService::summarize([], false, 10, null, 3, 5);
+		$this->assertSame(ThrottleService::STATE_OK, $r['state']);
+		$this->assertSame(['type' => 'policy_counter', 'count' => 3, 'max' => 5], $r['reasons'][0]);
+
+		// No counter reason when the policy limit is disabled
+		$r = ThrottleService::summarize([], false, 10, null, 3, 0);
 		$this->assertSame([], $r['reasons']);
 	}
 }
