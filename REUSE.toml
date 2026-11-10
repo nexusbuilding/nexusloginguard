@@ -1,0 +1,15 @@
+version = 1
+SPDX-PackageName = "nexusloginguard"
+SPDX-PackageDownloadLocation = "https://github.com/nexusbuilding/nexusloginguard"
+
+[[annotations]]
+path = ["l10n/**", "screenshots/**", "img/**", "package.json", "package-lock.json", "composer.json", "composer.lock", "tsconfig.json", ".nvmrc", "vendor-bin/**/composer.json", "vendor-bin/**/composer.lock", ".nextcloudignore", ".gitignore", "krankerl.toml", "psalm.xml", "tests/phpunit.xml"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Yannik / Nexus Building"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = ["js/**", "css/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Yannik / Nexus Building and Nextcloud contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

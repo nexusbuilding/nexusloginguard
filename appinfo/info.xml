@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!--
+  - SPDX-FileCopyrightText: 2026 Yannik / Nexus Building
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>nexusloginguard</id>
+	<name>Login Guard</name>
+	<name lang="de">Login Guard</name>
+	<summary>Failed logins per user, live brute-force status and one-click unblocking</summary>
+	<summary lang="de">Fehlgeschlagene Anmeldungen pro Benutzer, Brute-Force-Status und Entsperren per Klick</summary>
+	<description><![CDATA[**Login Guard** shows who failed to log in, how often, from where – and why an account or IP is currently throttled or blocked by Nextcloud's brute-force protection.
+
+- **Per-user overview** of failed logins (24 h / 7 days / selected range), last IP, client and reason (wrong password, unknown login name, disabled account, failed 2FA)
+- **Live brute-force status** read directly from Nextcloud (works with the database and the Redis backend): throttled with current delay, or blocked (HTTP 429) – including a human readable reason
+- **Unblock** an account (all its IPs of the last 48 h) or a single IP with one click, optionally re-enable disabled accounts
+- **Statistics**: failed logins per day, reasons, top accounts and top IPs
+- **IP check** for any address, even for attempts that happened before the app was installed
+- **Audit trail** of every unblock action, also written to the Nextcloud log
+- **Delegation**: besides admins, selected groups (e.g. team leads or helpdesk) can be granted access in *Administration settings → Security*
+- Configurable retention (default 90 days), automatic cleanup
+
+Note: Nextcloud throttles per IP address (IPv6: /64 network), not per account. Make sure `trusted_proxies` is configured correctly when running behind a reverse proxy.]]></description>
+	<description lang="de"><![CDATA[**Login Guard** zeigt, wer sich wie oft und von wo falsch angemeldet hat – und warum ein Konto bzw. eine IP gerade vom Nextcloud-Brute-Force-Schutz gedrosselt oder gesperrt ist.
+
+- **Übersicht pro Benutzer**: Fehlversuche (24 Std. / 7 Tage / Zeitraum), letzte IP, Client und Grund (falsches Passwort, unbekannter Loginname, deaktiviertes Konto, 2FA fehlgeschlagen)
+- **Live-Brute-Force-Status** direkt aus Nextcloud (Datenbank- und Redis-Backend): gedrosselt mit aktueller Verzögerung oder gesperrt (HTTP 429) – inkl. verständlichem Grund
+- **Entsperren** eines Kontos (alle IPs der letzten 48 Std.) oder einer einzelnen IP per Klick, optional deaktivierte Konten reaktivieren
+- **Statistik**: Fehlversuche pro Tag, Gründe, Top-Konten und Top-IPs
+- **IP-Prüfung** für beliebige Adressen
+- **Verlauf** aller Entsperr-Aktionen, zusätzlich im Nextcloud-Log
+- **Delegation**: neben Admins können Gruppen (z. B. Teamleitungen oder Helpdesk) unter *Verwaltung → Sicherheit* freigeschaltet werden
+- Einstellbare Aufbewahrung (Standard 90 Tage) mit automatischer Bereinigung]]></description>
+	<version>1.0.0</version>
+	<licence>AGPL-3.0-or-later</licence>
+	<author mail="yannik@mediapresenters.de" homepage="https://nexusbuilding.de">Yannik (Nexus Building)</author>
+	<namespace>NexusLoginGuard</namespace>
+	<category>security</category>
+	<category>monitoring</category>
+	<website>https://github.com/nexusbuilding/nexusloginguard</website>
+	<bugs>https://github.com/nexusbuilding/nexusloginguard/issues</bugs>
+	<repository type="git">https://github.com/nexusbuilding/nexusloginguard.git</repository>
+	<screenshot small-thumbnail="https://raw.githubusercontent.com/nexusbuilding/nexusloginguard/main/screenshots/accounts-small.png">https://raw.githubusercontent.com/nexusbuilding/nexusloginguard/main/screenshots/accounts.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/nexusbuilding/nexusloginguard/main/screenshots/details.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/nexusbuilding/nexusloginguard/main/screenshots/statistics.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/nexusbuilding/nexusloginguard/main/screenshots/settings.png</screenshot>
+	<dependencies>
+		<php min-version="8.1"/>
+		<nextcloud min-version="31" max-version="35"/>
+	</dependencies>
+	<background-jobs>
+		<job>OCA\NexusLoginGuard\BackgroundJob\CleanupJob</job>
+	</background-jobs>
+	<settings>
+		<admin>OCA\NexusLoginGuard\Settings\Admin</admin>
+	</settings>
+</info>
