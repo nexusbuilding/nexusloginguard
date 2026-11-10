@@ -31,7 +31,7 @@ import StatTile from '../components/StatTile.vue'
 import StateChip from '../components/StateChip.vue'
 import ViewHeader from '../components/ViewHeader.vue'
 import { type Account, api, errorMessage } from '../api.ts'
-import { APP_ID, formatDateTime, formatNumber, reasonText, relativeTime } from '../utils.ts'
+import { APP_ID, formatDateTime, formatNumber, loadPref, reasonText, relativeTime, savePref } from '../utils.ts'
 
 const props = defineProps<{ canEnable: boolean, policyMax: number }>()
 const emit = defineEmits<{
@@ -56,10 +56,10 @@ const filterOptions: Option[] = [
 	{ id: 'unknown', label: t(APP_ID, 'Unknown login names') },
 ]
 
-const period = ref<Option>(periodOptions[1]!)
-const filter = ref('all')
+const period = ref<Option>(periodOptions.find(o => o.id === loadPref('period', '7')) ?? periodOptions[1]!)
+const filter = ref<string>(filterOptions.some(o => o.id === loadPref('filter', 'all')) ? loadPref('filter', 'all') : 'all')
 const search = ref('')
-const autoRefresh = ref(false)
+const autoRefresh = ref<boolean>(loadPref('autoRefresh', false) === true)
 const loading = ref(true)
 const refreshing = ref(false)
 const accounts = ref<Account[]>([])
@@ -107,17 +107,22 @@ async function load(silent = false) {
 	}
 }
 
-watch(period, () => load())
+watch(period, (p) => {
+	savePref('period', p.id)
+	load()
+})
+watch(filter, f => savePref('filter', f))
 watch(search, () => {
 	window.clearTimeout(searchTimer)
 	searchTimer = window.setTimeout(() => load(true), 350)
 })
 watch(autoRefresh, (on) => {
+	savePref('autoRefresh', on)
 	window.clearInterval(timer)
 	if (on) {
 		timer = window.setInterval(() => load(true), 30000)
 	}
-})
+}, { immediate: true })
 
 onMounted(() => load())
 onBeforeUnmount(() => {

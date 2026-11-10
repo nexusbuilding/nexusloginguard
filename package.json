@@ -1,6 +1,6 @@
 {
   "name": "nexusloginguard",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Failed logins per user, live brute-force status and unblocking for Nextcloud",
   "license": "AGPL-3.0-or-later",
   "private": true,

@@ -129,3 +129,30 @@ export function relativeTime(ts: number): string {
 export function formatNumber(value: number): string {
 	return value.toLocaleString(locale())
 }
+
+/**
+ * Per-browser view preferences (localStorage). Storage may be unavailable
+ * (private mode, blocked site data), so every access is guarded.
+ * @param key preference name
+ * @param fallback value when nothing is stored
+ */
+export function loadPref<T>(key: string, fallback: T): T {
+	try {
+		const raw = window.localStorage.getItem(`${APP_ID}:${key}`)
+		return raw === null ? fallback : JSON.parse(raw) as T
+	} catch {
+		return fallback
+	}
+}
+
+/**
+ * @param key preference name
+ * @param value value to store
+ */
+export function savePref(key: string, value: unknown): void {
+	try {
+		window.localStorage.setItem(`${APP_ID}:${key}`, JSON.stringify(value))
+	} catch {
+		// ignore – preference is just not remembered
+	}
+}

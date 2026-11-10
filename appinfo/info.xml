@@ -34,7 +34,7 @@ Note: Nextcloud throttles per IP address (IPv6: /64 network), not per account. M
 - **Verlauf** aller Entsperr-Aktionen, zusätzlich im Nextcloud-Log
 - **Delegation**: neben Admins können Gruppen (z. B. Teamleitungen oder Helpdesk) unter *Verwaltung → Sicherheit* freigeschaltet werden
 - Einstellbare Aufbewahrung (Standard 90 Tage) mit automatischer Bereinigung]]></description>
-	<version>1.0.1</version>
+	<version>1.0.2</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="yannik@mediapresenters.de" homepage="https://nexusbuilding.de">Yannik (Nexus Building)</author>
 	<namespace>NexusLoginGuard</namespace>
