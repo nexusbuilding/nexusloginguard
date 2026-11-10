@@ -48,18 +48,6 @@ docker exec nextcloud chown -R www-data:www-data /var/www/html/custom_apps/nexus
 docker exec -u www-data nextcloud php occ app:enable nexusloginguard
 ```
 
-## Development
-
-```bash
-npm ci && npm run build      # or: npm run watch
-composer install             # installs psalm, php-cs-fixer, phpunit via vendor-bin
-composer psalm
-composer cs:check
-npm run lint && npm run stylelint
-```
-
-Release: tag `vX.Y.Z` and publish a GitHub release – the workflow in `.github/workflows/appstore-build-publish.yml` builds, signs and uploads the app (secrets `APP_PRIVATE_KEY` and `APPSTORE_TOKEN` required).
-
 ## License
 
 AGPL-3.0-or-later
